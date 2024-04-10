@@ -9,21 +9,20 @@ tf.experimental.numpy.experimental_enable_numpy_behavior()
 dtype = np.float32
 N = 100
 
+#referenced from wikipedia and stackoverflow
 def kl_mvn(m0, S0, m1, S1):
-    # store inv diag covariance of S1 and diff between means
     N = m0.shape[0]
     iS1 = np.linalg.inv(S1)
     diff = m1 - m0
 
-    # kl is made of three terms
     tr_term   = np.trace(iS1 @ S0)
-    det_term  = np.log(np.linalg.det(S1)/np.linalg.det(S0)) #np.sum(np.log(S1)) - np.sum(np.log(S0))
-    quad_term = diff.T @ np.linalg.inv(S1) @ diff #np.sum( (diff*diff) * iS1, axis=1)
-    #print(tr_term,det_term,quad_term)
+    det_term  = np.log(np.linalg.det(S1)/np.linalg.det(S0)) 
+    quad_term = diff.T @ np.linalg.inv(S1) @ diff 
     D_kl = .5 * (tr_term + det_term + quad_term - N)
     #pinskers
     return np.sqrt(.5*D_kl)
 
+#Implementations for three methods based off tensorflow docs.
 def RWMH(d, true_mean, true_cov):
     
     #posterior = tfd.MultivariateNormalDiag(loc = mu_N, scale_diag = sigma_N)
