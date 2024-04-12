@@ -9,7 +9,6 @@ tf.experimental.numpy.experimental_enable_numpy_behavior()
 dtype = np.float32
 N = 100
 
-#referenced from wikipedia and stackoverflow
 def kl_mvn(m0, S0, m1, S1):
     N = m0.shape[0]
     iS1 = np.linalg.inv(S1)
@@ -20,13 +19,10 @@ def kl_mvn(m0, S0, m1, S1):
     quad_term = diff.T @ np.linalg.inv(S1) @ diff 
     D_kl = .5 * (tr_term + det_term + quad_term - N)
     #pinskers
-    return np.sqrt(.5*D_kl)
+    return np.sqrt(2*D_kl)
 
-#Implementations for three methods based off tensorflow docs.
 def RWMH(d, true_mean, true_cov):
     
-    #posterior = tfd.MultivariateNormalDiag(loc = mu_N, scale_diag = sigma_N)
-    #define target via cholesky decomposition (explain this)
     L = tf.linalg.cholesky(true_cov)
     target = tfd.MultivariateNormalTriL(loc=true_mean,scale_tril=L)
     num_results = 1000
@@ -40,7 +36,7 @@ def RWMH(d, true_mean, true_cov):
         num_burnin_steps=0,
         num_steps_between_results=0,
         trace_fn=None,
-        seed=2024)
+        seed=1234)
 
     sample_mean = tf.math.reduce_mean(samples, axis=0)
     mean_sample_mean = tf.math.reduce_mean(sample_mean, axis=0)
@@ -63,11 +59,11 @@ def MALA(d, true_mean, true_cov):
         current_state=init_state,
         kernel=tfp.mcmc.MetropolisAdjustedLangevinAlgorithm(
             target_log_prob_fn=target.log_prob,
-            step_size=.1),
+            step_size=1./d),
         num_burnin_steps=0,
         num_steps_between_results=0,
         trace_fn=None,
-        seed=2024)
+        seed=1234)
 
     sample_mean = tf.reduce_mean(samples, axis=[0, 1])
     x = (samples - sample_mean)[..., tf.newaxis]
@@ -83,21 +79,17 @@ def HMC(d, true_mean, true_cov):
     num_chains = 100
     init_state = np.ones([num_chains, d], dtype=dtype)
 
-    adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
-    tfp.mcmc.HamiltonianMonteCarlo(
-        target_log_prob_fn=target.log_prob,
-        num_leapfrog_steps=2,
-        step_size=1.),
-        num_adaptation_steps=100)
-
     samples = tfp.mcmc.sample_chain(
         num_results=num_results,
         current_state=init_state,
-        kernel=adaptive_hmc,
+        kernel=tfp.mcmc.HamiltonianMonteCarlo(
+            target_log_prob_fn=target.log_prob,
+            num_leapfrog_steps=4*d**(1./4),
+            step_size=np.sqrt(1/(((4*d**(1./4))**2)*np.sqrt(d)))),
         num_burnin_steps=0,
         num_steps_between_results=0,
         trace_fn=None,
-        seed=2024)
+        seed=1234)
     
     sample_mean = tf.reduce_mean(samples, axis=[0, 1])
     x = (samples - sample_mean)[..., tf.newaxis]
@@ -112,7 +104,7 @@ def simulate(d, n_iter):
 
     mu = tf.squeeze(tf.linalg.diag_part(mvn.sample(1)))
     likelihood = tfd.MultivariateNormalDiag(loc = mu, scale_diag = (1/N)*np.eye(d))
-    #from clt can directly sample xbar (prove this)
+    #from clt can directly sample xbar 
     x_bar = likelihood.sample(1)
 
     true_cov = dtype((1/N+1)*np.eye(d))
@@ -174,7 +166,7 @@ def gen_plot():
         ind = ind + 1
         print(ind)
 
-    f = open('objs.pkl','wb')
+    f = open('test.pkl','wb')
     pickle.dump([rwmh_means,rwmh_lowers,rwmh_uppers,
                  mala_means,mala_lowers,mala_uppers,
                  hmc_means,hmc_lowers,hmc_uppers,dims],f)
